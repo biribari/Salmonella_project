@@ -12,7 +12,7 @@ dok=pd.read_excel (r'C:/Users/Bari/Desktop/python/GB.xlsx', sheet_name = 0, head
 #writer.save() #How to save?
 
 dic = {}
-for i,x in enumerate(dok.columns): #x=az oszlopok fejlécei, i= számláló
+for i,x in enumerate(dok.columns): #x= head of columns, i= counter
 	#print(x)
 	#break
 	if i >= 3:
