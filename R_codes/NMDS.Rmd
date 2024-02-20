@@ -1,0 +1,367 @@
+---
+title: "NMDSplot"
+output: word_document
+editor_options:
+  chunk_output_type: console
+---
+```{r}
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+#if(!require(devtools)) install.packages("devtools")
+#devtools::install_github("sinhrks/ggfortify")
+library(ggfortify)
+#install.packages("FactoMineR")
+library(FactoMineR)
+library("ggfortify")
+library(ggfortify)
+library(rafalib)
+#install.packages("ggplot2")
+#install.packages("tidyverse")
+library(ggplot2)
+#install.packages("plotly")
+library(plotly)
+library(FactoMineR)
+#install.packages("factoextra")
+library(factoextra)
+library(dplyr)
+#install.packages('ggrepel')
+library(ggrepel)
+#install.packages("vegan")
+library(vegan)
+```
+
+```{r}
+setwd("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS")
+getwd()
+
+rc <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/Salmonella_invitro-invivo-switch_raw_rc.csv", row.names=1)
+View(rc)
+class(rc)
+str(rc)
+head(rc)
+
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_all.csv", sep=";")
+View(me)
+```
+
+```{r}
+library(DESeq2)
+me$Group <- factor(me$Group)
+d <- DESeqDataSetFromMatrix(countData=rc, colData=me, design=~1)
+#View(d)
+```
+# Size factors
+
+The first step is estimating size factors. The data is normalised for sequencing depth and compositional bias as done for the VST step. DESeq2 uses a method called *median-of-ratios* for this step.
+
+```{r,block.title=TRUE}
+d <- DESeq2::estimateSizeFactors(d,type="ratio")
+#View(d)
+#?estimateSizeFactors
+class(d)
+```
+#Write out the Size factor normalized read counts!!!! :-)
+```{r,block.title=TRUE}
+dds <- estimateSizeFactors(d)
+norm_data <- counts(dds, normalized=TRUE)
+View(norm_data)
+
+write.csv(norm_data,"D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=T)
+```
+#NMDS
+```{r}
+SF_norm <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=1)
+View(SF_norm)
+SF_norm_f <- SF_norm[rowSums(SF_norm)>0, ] #delete rows that all 0
+View(SF_norm_f)
+SF_norm_t <- t(SF_norm_f) #transform
+View(SF_norm_t)
+#make community matrix - extract columns with abundance information
+matrix = SF_norm_t[,2:ncol(SF_norm_t)]
+#turn abundance data frame into a matrix
+df_matrix = as.matrix(matrix)
+set.seed(10)
+nmds = metaMDS(df_matrix, distance = "bray")
+plot(nmds)
+```
+
+```{r}
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+#add columns to data frame 
+data.scores$SampleName = me$SampleName
+data.scores$Model = me$Model
+data.scores$Group = me$Group
+ 
+head(data.scores)
+```
+data.scores$Sample = pc$Sample
+data.scores$Time = pc$Time
+data.scores$Type = pc$Type
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) 
+NMDS_nice
+
+```
+###Labelling
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2),label = rownames(data.scores)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model, ))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) +
+    geom_text(aes(label = SampleName,fontface=2, hjust=0, vjust=-0.5))
+NMDS_nice
+
+```
+##Filtering data for NMDS --> In vivo+early
+```{r}
+SF_norm <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=1)
+View(SF_norm)
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_all.csv", sep=";")
+View(me)
+me_e <- (me[c(1:39,49:51,63:68),])
+View(me_e)
+SF_norm_t <- t(SF_norm) #transform
+View(SF_norm_t)
+SF_norm_e <- (SF_norm_t[c(1:39,49:51,63:68),]) #filtering for early and switch
+View(SF_norm_e)
+SF_norm_f <- SF_norm_e[,colSums(SF_norm_e)>0] #delete columns that all 0
+View(SF_norm_f)
+
+#make community matrix - extract columns with abundance information
+matrix = SF_norm_f[,2:ncol(SF_norm_f)]
+#turn abundance data frame into a matrix
+df_matrix = as.matrix(matrix)
+set.seed(1000)
+nmds = metaMDS(df_matrix, distance = "bray")
+plot(nmds)
+
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+#add columns to data frame 
+data.scores$SampleName = me_e$SampleName
+data.scores$Model = me_e$Model
+data.scores$Group = me_e$Group
+ 
+head(data.scores)
+```
+
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) 
+NMDS_nice
+
+```
+
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2),label = rownames(data.scores)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model, ))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) +
+    geom_text(aes(label = SampleName,fontface=2, hjust=0, vjust=-0.5))
+NMDS_nice
+
+```
+##Filtering data for NMDS --> In vivo+early-CE
+```{r}
+SF_norm <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=1)
+View(SF_norm)
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_all.csv", sep=";")
+View(me)
+me_e <- (me[c(1:39,63:68),])
+View(me_e)
+SF_norm_t <- t(SF_norm) #transform
+View(SF_norm_t)
+SF_norm_e <- (SF_norm_t[c(1:39,63:68),]) #filtering for early and switch
+View(SF_norm_e)
+SF_norm_f <- SF_norm_e[,colSums(SF_norm_e)>0] #delete columns that all 0
+View(SF_norm_f)
+
+#make community matrix - extract columns with abundance information
+matrix = SF_norm_f[,2:ncol(SF_norm_f)]
+#turn abundance data frame into a matrix
+df_matrix = as.matrix(matrix)
+set.seed(1000)
+nmds = metaMDS(df_matrix, distance = "bray")
+plot(nmds)
+
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+#add columns to data frame 
+data.scores$SampleName = me_e$SampleName
+data.scores$Model = me_e$Model
+data.scores$Group = me_e$Group
+ 
+head(data.scores)
+```
+
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2),label = rownames(data.scores)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model, ))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) +
+    geom_text(aes(label = SampleName,fontface=2, hjust=0, vjust=-0.5))
+NMDS_nice
+
+```
+##Filtering data for NMDS --> In vivo early CE-CC
+```{r}
+SF_norm <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=1)
+#View(SF_norm)
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_all.csv", sep=";")
+View(me)
+me_e <- (me[c(37:39,49),])
+View(me_e)
+SF_norm_t <- t(SF_norm) #transform
+#View(SF_norm_t)
+SF_norm_e <- (SF_norm_t[c(37:39,49),]) #filtering for early and switch
+#View(SF_norm_e)
+SF_norm_f <- SF_norm_e[,colSums(SF_norm_e)>0] #delete columns that all 0
+#View(SF_norm_f)
+
+#make community matrix - extract columns with abundance information
+matrix = SF_norm_f[,2:ncol(SF_norm_f)]
+#turn abundance data frame into a matrix
+df_matrix = as.matrix(matrix)
+set.seed(1000)
+nmds = metaMDS(df_matrix, distance = "bray")
+plot(nmds)
+
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+#add columns to data frame 
+data.scores$SampleName = me_e$SampleName
+data.scores$Model = me_e$Model
+data.scores$Group = me_e$Group
+ 
+head(data.scores)
+```
+
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2),label = rownames(data.scores)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model, ))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) +
+    geom_text(aes(label = SampleName,fontface=2, hjust=0, vjust=-0.5))
+NMDS_nice
+
+```
+##Filtering data for NMDS --> In vivo late
+```{r}
+SF_norm <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_all_1.csv",row.names=1)
+#View(SF_norm)
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_all.csv", sep=";")
+View(me)
+me_e <- (me[c(37:39,63:68),])
+View(me_e)
+SF_norm_t <- t(SF_norm) #transform
+#View(SF_norm_t)
+SF_norm_e <- (SF_norm_t[c(37:39,63:68),]) #filtering for early and switch
+#View(SF_norm_e)
+SF_norm_f <- SF_norm_e[,colSums(SF_norm_e)>0] #delete columns that all 0
+#View(SF_norm_f)
+
+#make community matrix - extract columns with abundance information
+matrix = SF_norm_f[,2:ncol(SF_norm_f)]
+#turn abundance data frame into a matrix
+df_matrix = as.matrix(matrix)
+set.seed(1000)
+nmds = metaMDS(df_matrix, distance = "bray", k=2, trymax = 20)
+plot(nmds)
+
+
+#extract NMDS scores (x and y coordinates)
+data.scores = as.data.frame(scores(nmds))
+#add columns to data frame 
+data.scores$SampleName = me_e$SampleName
+data.scores$Model = me_e$Model
+data.scores$Group = me_e$Group
+ 
+head(data.scores)
+```
+
+```{r}
+library(ggplot2)
+
+NMDS_nice = ggplot(data.scores, aes(x = NMDS1, y = NMDS2),label = rownames(data.scores)) + 
+    geom_point(size = 4, aes( shape = Group, colour = Model, ))+ 
+    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
+    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
+    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
+    legend.position = "right", axis.title.y = element_text(face = "bold", size = 14), 
+    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
+    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
+    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+    legend.key=element_blank()) + 
+    labs(x = "NMDS1", colour = "Model", y = "NMDS2", shape = "Group")  + 
+    scale_colour_manual(values = c("#009E73", "#E69F00","#005f9e")) +
+    geom_text(aes(label = SampleName,fontface=2, hjust=0, vjust=-0.5))
+NMDS_nice
+
+```

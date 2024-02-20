@@ -1,0 +1,140 @@
+---
+title: "Normalization_compared"
+output: word_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+library(pheatmap) #plot heatmap
+library(DESeq2) #differential gene expression for RNA-seq
+library(pvclust) #clustering bootstrapping
+library(biomaRt) #gene annotation
+library(rafalib) #nice plot arrangement
+rafalib::mypar(mar=c(6,2.5,2.5,1)) #sets nice arrangement for the whole document
+library(dplyr) # data wrangling
+library(ggplot2) # plotting
+library(edgeR) # rna-seq
+library(NOISeq)
+```
+###TPM count
+```{r}
+setwd("D:/RNAseq/preprocessing/data/in-vivo/normalization_test")
+getwd()
+
+all <- read.csv("raw_rc_SalmComp_Pathogenex_invivo_HeLa.csv", header=TRUE, sep=";", stringsAsFactors=F, row.names = 1, check.names=F, fileEncoding="UTF-8-BOM")
+#all <- as.integer(all)
+View(all)
+class(all)
+str(all)
+head(all)
+```
+
+## TPM count
+```{r}
+#' @title Compute TPM from a read count matrix
+#' @param counts A numeric data.frame of read counts with samples (columns) and genes (rows).
+#' @param len A vector of gene cds length equal to number of rows of dfr.
+#'
+#' https://support.bioconductor.org/p/91218/
+#'
+tpm <- function(counts,len) {
+  x <- counts/len
+  return(t(t(x)*1e6/colSums(x)))
+}
+```
+
+```{r}
+Ce_origi <- read.csv("Cecum-origi.csv", header=TRUE, sep=";", fileEncoding="UTF-8-BOM")
+View(Ce_origi)
+```
+
+```{r}
+#ce_co <- read.delim("/Cecum-origi.csv",sep="\t",header=TRUE,stringsAsFactors=F,comment.char="#")
+gene <- data.frame( gene_id = Ce_origi$Geneid , 
+                 transcript_length = Ce_origi$Length,
+                 stringsAsFactors = F, row.names = Ce_origi$Geneid)
+gene <- gene[!duplicated(gene$gene_id),]
+View(gene)
+```
+
+find shared genes between count data and annotation data and match their order.
+
+```{r}
+igenes <- intersect(rownames(all),gene$gene_id)
+View(igenes)
+gene1 <- gene[igenes,]
+all1 <- all[igenes,] #  ,drop = FALSE]# without drop r cannot handle useing only one column
+all.equal(rownames(all1),rownames(gene1))
+View(gene1)
+View(all1)
+```
+
+And then we run the `tpm()` function on the count data using the gene lengths. And then we create a boxplot of the resulting values.
+
+```{r}
+ctpm <- tpm(all1,gene1$transcript_length)
+ctpm_log <- log2( ctpm + 1 )
+boxplot(ctpm,ylab=expression('Log'[2]~'Read counts'),las=2, main="TPM", cex.lab=1, cex.axis=.5)
+write.csv(ctpm,"TPM-norm-CEearly-CC.csv",quote=F)
+```
+### SF_normlaization (DESeq2)
+
+```{r}
+rc <- read.csv("proba.csv", header=TRUE, sep=";", stringsAsFactors=F, row.names = 1, check.names=F, fileEncoding="UTF-8-BOM")
+View(rc)
+me <- read.csv ("meta-proba.csv", header=TRUE, stringsAsFactors=FALSE, row.names=1, sep=";", fileEncoding="UTF-8-BOM", check.names=F)
+View(me)
+```
+
+```{r}
+library(DESeq2)
+me$Group <- factor(me$Group)
+d <- DESeqDataSetFromMatrix(countData=rc, colData=me, design=~1)
+#View(d)
+```
+
+```{r,block.title=TRUE}
+d <- DESeq2::estimateSizeFactors(d,type="ratio")
+#View(d)
+#?estimateSizeFactors
+class(d)
+```
+#Write out the Size factor normalized read counts!!!! :-)
+```{r,block.title=TRUE}
+dds <- estimateSizeFactors(d)
+norm_data <- counts(dds, normalized=TRUE)
+View(norm_data)
+
+write.csv(norm_data,"SF_CEearly-CC_norm.csv",row.names=T)
+```
+
+#### TMM normalization (NOISeq)
+
+```{r}
+Ce_length <- read.csv("Gene_length.csv", header=TRUE, sep=";", fileEncoding="UTF-8-BOM")
+View(Ce_length)
+
+mySalmTMM <- tmm(rc, long = Ce_length$Length , lc = 0, k = 0)
+View(mySalmTMM)
+write.csv(mySalmTMM,"TMM-proba_ujgensor_lc-1.csv",row.names=T)
+?tmm
+```
+
+#### TMM normalization (edgeR)
+```{r}
+?calcNormFactors
+TMM_rc <- calcNormFactors(rc, method = c("TMM"))
+View(TMM_rc)
+TMMnorm_rc <- cpm(TMM_rc, log=FALSE)
+View(TMMnorm_rc)
+
+TMM_rc <- calcNormFactors(rc, lib.size=NULL, method = "TMM")
+norm.data <- t(t(rc)/(TMM_rc*lib_size_CE.CC))
+View(norm.data)
+```
+scale.factors <- calcNormFactors(seqdata,lib.size=NULL method = "TMM")
+norm.data <- t(t(seqdata)/(scale.factors*lib.size))
+write.csv(norm.data,"C:\\Users\\hp folio\\Desktop\\TMM.csv")
+
+

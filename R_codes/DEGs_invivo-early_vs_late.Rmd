@@ -1,0 +1,252 @@
+---
+title: "DEGs_invivo-eanrly_vs_late"
+output: word_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr) # data wrangling
+library(ggplot2) # plotting
+library(DESeq2) # rna-seq
+library(edgeR) # rna-seq
+library(pheatmap) #heatmap
+library(ggrepel)
+```
+
+```{r}
+setwd("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1")
+getwd()
+
+rc <- read.csv ("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/Sp-CEday2.csv", header=TRUE, row.names=1, sep=";", fileEncoding="UTF-8-BOM", check.names=F) # rc=readcount
+
+View(rc)
+class(rc)
+str(rc)
+head(rc)
+
+me <- read.csv("meta_CEearly_vs_Sp.csv", header=TRUE, stringsAsFactors=FALSE, row.names=1, sep=";", fileEncoding="UTF-8-BOM", check.names=F)
+View(me)
+```
+dds <- estimateSizeFactors(dds)
+counts(dds, normalized=TRUE)
+#This is just dividing each column of 
+counts(dds)
+#by
+sizeFactors(dds)
+#You can pull up the help for all functions with:
+help(package="DESeq2",help="html")
+#And there is a section of the vignette, "Access to all calculated values":
+vignette("DESeq2")
+```{r}
+library(DESeq2)
+me$Group <- factor(me$Group)
+d <- DESeqDataSetFromMatrix(countData=rc, colData=me, design=~Group)
+#View(d)
+```
+# Size factors
+
+The first step is estimating size factors. The data is normalised for sequencing depth and compositional bias as done for the VST step. DESeq2 uses a method called *median-of-ratios* for this step.
+
+```{r,block.title=TRUE}
+d <- DESeq2::estimateSizeFactors(d,type="ratio")
+#View(d)
+#?estimateSizeFactors
+class(d)
+```
+#Write out the Size factor normalized read counts!!!! :-)
+```{r,block.title=TRUE}
+dds <- estimateSizeFactors(d)
+norm_data <- counts(dds, normalized=TRUE)
+#View(norm_data)
+
+#write.csv(norm_data,"D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/SF_all-early-late_rc.csv",row.names=T)
+```
+
+```{r,fig.height=4.5,fig.width=4.5}
+plot(sizeFactors(d),colSums(rc),xlab="Size factors",ylab="Total counts")
+```
+
+Gene-wide dispersions, fitted curve and shrinkage can be visualised using the `plotDispEsts()` function.
+
+```{r,fig.height=5.5,fig.width=5,block.title=TRUE}
+d <- DESeq2::estimateDispersions(d)
+plotDispEsts(d)
+```
+
+The most commonly used testing for comparing two groups in DESeq2 is the Walds's test. The null hypothesis is that the groups are not different and `logFC=0`. The list of contrasts can be seen using `resultsNames()`. Then we can pick our comparisons of interest.
+
+```{r,block.title=TRUE}
+dg <- nbinomWaldTest(d)
+resultsNames(dg)
+#View(dg)
+```
+
+And we can get the result tables for the three different comparisons. The summary of the result object shows the number of genes that are differentially expressed with positive or negative fold-change and outliers.
+
+
+```{r,block.title=TRUE}
+res <- results(dg,name="Group_Sp_vs_CE_early",alpha=0.05)
+res$padj[is.na(res$padj)] <- 1
+#res <- na.omit(res)
+summary(res)
+head(res)
+#write.csv(res,"DGE-CEearly-late_predicted-multip_const-rc.csv",row.names=T)
+```
+
+```{r,block.title=TRUE}
+hist(res$pvalue,main="Pval distribution",xlab="P-values")
+```
+#lfcshrink
+This is an optional extra step to generate more accurate log2 fold changes. This step corrects the log2 fold changes for genes with high dispersion. This does not change the p-values or the list of DE genes.
+
+```{r,block.title=TRUE}
+lres <- lfcShrink(dg,coef="Group_Sp_vs_CE_early",res=res,type="apeglm")
+lres1 <- na.omit(lres)
+summary(lres1)
+head(lres1)
+write.csv(lres1,"D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/DEGs_lfcshrink_CE-early_Sp.csv",row.names=T)
+```
+
+```{r,block.title=TRUE}
+  if (!requireNamespace('BiocManager', quietly = TRUE))
+    install.packages('BiocManager')
+
+  BiocManager::install('EnhancedVolcano')
+  
+```
+
+```{r,block.title=TRUE}
+library(EnhancedVolcano)
+lres2 <- read.csv ("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/DEGs_lfcshrink_CE-early_Sp.csv", header=TRUE, row.names=1, sep=";", fileEncoding="UTF-8-BOM", check.names=F) # rc=readcount
+
+View(lres2)
+class(lres2)
+str(lres2)
+head(lres2)
+
+EnhancedVolcano(lres2,
+    lab = rownames(lres2),
+    x = 'log2FoldChange',
+    y = 'pvalue')
+
+EnhancedVolcano(lres2,
+    lab = rownames(lres2),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    title = 'Ctrl versus CEearly',
+    pCutoff = 10e-6,
+    FCcutoff = 1,
+    pointSize = 3.0,
+    labSize = 6.0)
+
+EnhancedVolcano(lres2,
+    lab = rownames(lres2),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = c('SL1344_RS13680','SL1344_RS05235','SL1344_RS17155','SL1344_RS22395'),
+    #selectLab = c('raiA','rmf','hpf', 'hflx'),
+    xlab = bquote(~Log[2]~ 'fold change'),
+    #pCutoff = 10e-32,
+    #FCcutoff = 1.0,
+    pointSize = 3.0,
+    labSize = 5.0,
+    labCol = 'black',
+    labFace = 'bold',
+    boxedLabels = TRUE,
+    colAlpha = 4/5,
+    legendPosition = 'right',
+    legendLabSize = 9,
+    legendIconSize = 3.0,
+    drawConnectors = TRUE,
+    widthConnectors = 1.0,
+    colConnectors = 'black')
+
+```
+
+```{r,block.title=TRUE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("apeglm")
+```
+
+```{r,block.title=TRUE}
+# all genes
+nrow(as.data.frame(lres1))
+# only genes with padj <0.05
+nrow(dplyr::filter(as.data.frame(lres1),padj<0.05))
+# only genes with padj <0.05 and an absolute fold change >2
+nrow(dplyr::filter(as.data.frame(lres1),padj<0.05,abs(log2FoldChange)>2))
+nrow(dplyr::filter(as.data.frame(lres1),padj<0.05,abs(log2FoldChange)>1))
+nrow(dplyr::filter(as.data.frame(lres1),pvalue<0.05,abs(log2FoldChange)>1))
+# only genes with padj <0.1
+nrow(dplyr::filter(as.data.frame(lres1),padj<0.1))
+# only genes with padj <0.1 and an absolute fold change >2
+nrow(dplyr::filter(as.data.frame(lres1),pvalue<0.5,abs(log2FoldChange)>1.3119))
+```
+MA plot
+The MA plot shows mean expression vs log fold change for all genes. The plotMA() function from DESeq2 takes a results object as input. Differentially expressed genes are marked in bright colour.
+```{r,block.title=TRUE}
+DESeq2::plotMA(res)
+DESeq2::plotMA(lres)
+```
+A volcano plot is similar to the MA plot. It plots log fold change vs adjusted p-values.
+
+```{r,block.title=TRUE}
+ggplot()+
+  geom_point(data=as.data.frame(lres),aes(x=log2FoldChange,y=-log10(padj)),col="grey80",alpha=0.5)+
+  geom_point(data=filter(as.data.frame(lres),padj<0.05),aes(x=log2FoldChange,y=-log10(padj)),col="red",alpha=0.7)+
+  geom_hline(aes(yintercept=-log10(0.05)),alpha=0.5)+
+  geom_vline(aes(xintercept=c(-4, 4)),alpha=0.5)+
+  theme_bw()
+```
+#Here you would select genes based on p-values and logFC you obtained from differential expression.
+
+```{r,block.title=TRUE}
+res1 <- na.omit(lres)
+selected_genes <- rownames(res1)[(res1$pvalue < 0.05) & (abs(res1$log2FoldChange) > 1.3119)]
+#View(selected_genes)
+#write.csv(selected_genes,"DEGs_CEearly-CEpredictedlate_constans_log2Fc1-0,05.csv",row.names=T)
+```
+
+```{r,block.title=TRUE}
+selected_genes2 <- rownames(res1)[(res1$pvalue < 0.1) & (abs(res1$log2FoldChange) > 1)]
+#write.csv(selected_genes,"DEGs_CEearly-CEpredictedlate_log2Fc1-0,1.csv",row.names=T)
+```
+
+```{r,block.title=TRUE}
+ggplot()+
+  geom_point(data=as.data.frame(res1),aes(x=log2FoldChange,y=-log10(padj)),col="grey80",alpha=0.5)+
+  geom_point(data=filter(as.data.frame(res1),padj<0.05),aes(x=log2FoldChange,y=-log10(padj)),col="red",alpha=0.7)+
+  geom_hline(aes(yintercept=-log10(0.05)),alpha=0.5)+
+  theme_bw()
+#View(res1)
+#View(selected_genes)
+```
+It can be a good idea to manually verify some of these genes by plotting out it's actual read count values. We can use the function `plotCounts()` to visualise the data points for a gene of interest. Below, we see the counts before and after normalisation.
+
+```{r,fig.height=5,fig.width=5,block.title=TRUE}
+plotCounts(d,gene=rownames(res)[1],intgroup="Group",normalized=F)
+plotCounts(d,gene=rownames(res)[1],intgroup="Group",normalized=T)
+```
+
+```{r,block.title=TRUE}
+#View(selected_genes)
+rc_SF <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/SF_all-early-late_rc.csv", header=TRUE, row.names=1)
+View(rc_SF)
+
+Znorm1 <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/CEearly-late_log2TPM_z_norm.csv",row.names=T)
+View(Znorm1)
+
+Znorm1 <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/CEearly-late_log2TPM_z_norm.csv", header=TRUE, row.names=1)
+View(Znorm1)
+
+```
+#Do a heatmap using the Size factor normalized data.
+#pheatmap
+```{r,block.title=TRUE}
+cl <- pheatmap(rc_SF[rownames(rc_SF) %in% selected_genes,],scale="row",color=colorRampPalette(c("navy","white","firebrick"))(90),border_color=NA,cluster_cols=F, cutree_rows=2)
+ #  %in% this takes the rows from the rc data table. We need to use the size factot corrected rs-s for the heatmap!!
+gene_clusters <- cutree(cl$tree_row,k=2)
+```

@@ -1,0 +1,182 @@
+---
+title: "Limma_Voom"
+output: word_document
+date: "2022-11-02"
+editor_options:
+  chunk_output_type: console
+---
+#edgeR has Limma so install edgeR
+```{r setup, include=FALSE}
+#if (!require("BiocManager", quietly = TRUE))
+   #install.packages("BiocManager")
+#xBiocManager::install("edgeR")
+```
+
+```{r setup, include=FALSE}
+library(edgeR)
+```
+#my data
+```{r}
+setwd("D:/RNAseq/preprocessing/data/in-vivo/2022_data/Limma-voom")
+getwd()
+
+rc <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/2022_data/PCA_NMDS/lib4_readcounts_filtered_noRNA_excluded_low_covarage.csv", row.names=1)
+View(rc)
+class(rc)
+str(rc)
+head(rc)
+
+me <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/2022_data/PCA_NMDS/meta_lib4_excluded_low_coverage.csv", sep=";")
+View(me)
+```
+#filtering samples out :-()
+```{r,block.title=TRUE}
+rc2 <- (rc[, c(1:4,8:12)]) #12h, 24h CC and CE
+me2 <- (me[c (1:4,8:12),])
+View(rc2)
+View(me2)
+```
+#normalization
+```{r}
+d0 <- DGEList(rc)
+d0 <- calcNormFactors(d0) #calculate normalization factor not actually normalizing yet!
+View(d0)
+```
+
+```{r}
+cutoff <- 1
+drop <- which(apply(cpm(d0), 1, max) < cutoff) ## NOOO! CPM doesn't optimize for gene length :-()
+d <- d0[-drop,] 
+dim(d) # number of genes left
+```
+#TPM?
+```{r}
+d2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/2022_data/Limma-voom/TPM-lib4_readcounts_filtered_noRNA_no_low-cov1102.csv", row.names=1)
+View(d2)
+nrow(d2)
+ncol(d2)
+Tissue <- me$Group
+timepoints <- me$Model
+samplenames <- me$SampleName
+group2 <- interaction(Tissue, timepoints)
+#View(group2)
+
+plotMDS(d2, col = as.numeric(group2))
+
+mm <- model.matrix(~0 + group2)
+y <- voom(d2, mm, plot = T)
+fit <- lmFit(y, mm)
+head(coef(fit))
+
+contr <- makeContrasts(group2CC.12h - group2CE.12h, levels = colnames(coef(fit)))
+View(contr)
+
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+length(which(top.table$adj.P.Val < 0.05))
+
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/12h_CE-CC_limma-voom-DEGs_based-on_TPM.csv",row.names=T)
+###########################################################################xxxxxxx
+contr <- makeContrasts(group2CC.24h - group2CE.24h, levels = colnames(coef(fit)))
+View(contr)
+
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+length(which(top.table$adj.P.Val < 0.05))
+
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/24h_CE-CC_limma-voom-DEGs_based-on_TPM.csv",row.names=T)
+###########################################################################xxxxxxx
+contr <- makeContrasts(group2CC.36h - group2CE.36h, levels = colnames(coef(fit)))
+View(contr)
+
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+length(which(top.table$adj.P.Val < 0.05))
+
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/36h_CE-CC_limma-voom-DEGs_based-on_TPM.csv",row.names=T)
+```
+
+```{r}
+Tissue <- me$Group
+timepoints <- me$Model
+samplenames <- me$SampleName
+View(timepoints)
+View(Tissue)
+View(samplenames)
+
+#group <- interaction(samplenames,Tissue )
+#View(group)
+#plotMDS(d, col = as.numeric(group))
+
+group2 <- interaction(Tissue, timepoints)
+View(group2)
+
+plotMDS(d, col = as.numeric(group2))
+```
+
+```{r}
+mm <- model.matrix(~0 + group2)
+y <- voom(d, mm, plot = T)
+```
+#lmFit fits a linear model using weighted least squares for each gene
+```{r}
+fit <- lmFit(y, mm)
+head(coef(fit))
+```
+#Comparisons between groups (log fold-changes) are obtained as contrasts of these fitted linear models:
+```{r}
+contr <- makeContrasts(group2CC.12h - group2CE.12h, levels = colnames(coef(fit)))
+View(contr)
+```
+#Estimate contrast for each gene
+```{r}
+tmp <- contrasts.fit(fit, contr)
+```
+#Empirical Bayes smoothing of standard errors (shrinks standard errors that are much larger or smaller than those from other genes towards the average standard error) (see https://www.degruyter.com/doi/10.2202/1544-6115.1027)
+```{r}
+tmp <- eBayes(tmp)
+```
+#What genes are most differentially expressed?
+```{r}
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/12h_CE-CC_limma-voom-DEGs.csv",row.names=T)
+```
+#How many DE genes are there?
+```{r}
+length(which(top.table$adj.P.Val < 0.05))
+
+top.table$Gene <- rownames(top.table)
+top.table <- top.table[,c("Gene", names(top.table)[1:6])]
+write.table(top.table, file = "CC-CE_12h.txt", row.names = F, sep = "\t", quote = F)
+```
+#new contrast
+```{r}
+contr <- makeContrasts(group2CC.24h - group2CE.24h, levels = colnames(coef(fit)))
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+length(which(top.table$adj.P.Val < 0.05))
+
+#write.table(top.table, file = "CC-CE_24h.txt", row.names = F, sep = "\t", quote = F)
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/24h_CE-CC_limma-voom-DEGs.csv",row.names=T)
+```
+#new contrast_2nd
+```{r}
+contr <- makeContrasts(group2CC.36h - group2CE.36h, levels = colnames(coef(fit)))
+tmp <- contrasts.fit(fit, contr)
+tmp <- eBayes(tmp)
+top.table <- topTable(tmp, sort.by = "P", n = Inf)
+head(top.table, 20)
+length(which(top.table$adj.P.Val < 0.05))
+
+#write.table(top.table, file = "CC-CE_36h.txt", row.names = F, sep = "\t", quote = F)
+write.csv(top.table,"D:/RNAseq/preprocessing/data/in-vivo/2022_data/36h_CE-CC_limma-voom-DEGs.csv",row.names=T)
+```

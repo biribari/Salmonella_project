@@ -1,0 +1,225 @@
+---
+title: "PCA-05-07"
+output: word_document
+editor_options:
+  chunk_output_type: console
+---
+```{r}
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+#if(!require(devtools)) install.packages("devtools")
+#devtools::install_github("sinhrks/ggfortify")
+library(ggfortify)
+#install.packages("FactoMineR")
+library(FactoMineR)
+library("ggfortify")
+library(ggfortify)
+library(rafalib)
+#install.packages("ggplot2")
+#install.packages("tidyverse")
+library(ggplot2)
+#install.packages("plotly")
+library(plotly)
+library(FactoMineR)
+#install.packages("factoextra")
+library(factoextra)
+library(dplyr)
+#install.packages('ggrepel')
+library(ggrepel)
+```
+
+```{r}
+setwd("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1")
+getwd()
+
+rc_all <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SalmComp-invitro_rc.csv", row.names=1, sep=";")
+View(rc_all)
+class(rc_all)
+str(rc_all)
+head(rc_all)
+
+
+me_all <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/meta_salmComp-invivo.csv", sep=";")
+View(me_all)
+```
+### SF normalization
+```{r}
+library(DESeq2)
+me_all$Group <- factor(me_all$Group)
+d <- DESeqDataSetFromMatrix(countData=rc_all, colData=me_all, design=~1)
+
+d <- DESeq2::estimateSizeFactors(d,type="ratio")
+#View(d)
+#?estimateSizeFactors
+#class(d)
+```
+#Write out the Size factor normalized read counts!!!! :-)
+```{r,block.title=TRUE}
+dds <- estimateSizeFactors(d)
+norm_data <- counts(dds, normalized=TRUE)
+#View(norm_data)
+
+#write.csv(norm_data,"D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_SalmComp-invitro_rc.csv",row.names=T)
+```
+## Transpose
+```{r}
+norm_data <- read.csv("D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/SF_SalmComp-invitro_rc.csv", row.names=1,sep=";")
+View(norm_data)
+head(norm_data)
+ncol(norm_data)
+nrow(norm_data)
+rc_all_t <- t(norm_data)
+View(rc_all_t)
+head(rc_all_t)
+ncol(rc_all_t)
+nrow(rc_all_t)
+#write.csv(rc_all_t,"D:/RNAseq/preprocessing/data/in-vivo/PCA_NMDS/transposed_SalmComp-invitro_rc.csv",row.names=T)
+```
+## Remove the collumns that sum=0
+```{r}
+#head(rc2)
+rc3 <- (rc_all_t[,c(1:5136)])
+#View(rc3)
+#head(rc3)
+#ncol(rc3)
+#ncol(rc_all_t)
+
+i<- c(seq(1,5136))
+mydata_ones <- rc3 [ rc3[, ncol(rc3)] == 0, ]
+class(mydata_ones)
+mydata_ones <- mydata_ones(as.numeric(mydata_ones),    # Convert to numeric matrix
+                  ncol = ncol(mydata_ones))
+sapply(mydata_ones, class)  
+rc4 <- cbind(rc3[, -ncol(rc3)] [, colSums(mydata_ones) >0 ])
+ncol(rc4)
+View(rc4)
+```
+## PCAs
+```{r}
+rc_pca <- prcomp(rc4[,c(1:5114)],center = TRUE, scale. = TRUE)
+#rc_pca <- prcomp(rc2,center = TRUE, scale. = TRUE)
+str(rc_pca)
+summary(rc_pca)
+#plot(rc_pca)
+
+autoplot(rc_pca)
+autoplot(rc_pca, data = rc2, colour = 'Group')
+autoplot(rc_pca, data = rc2, colour = 'Group', label = TRUE, label.size = 3)
+```
+## PCAs_CEearly-late+invitro
+```{r}
+rc2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/transposed_SF_Salmonella_invivo-invitro-all_rc_meta.csv", row.names=1)
+View(rc2)
+#head(rc2)
+rc2_a <- (rc2[c(1:42),c(1:5137)])
+rc3 <- (rc2[c(1:42),c(1:5136)])
+View(rc3)
+head(rc3)
+ncol(rc3)
+
+mydata_ones <- rc3 [ rc3[, ncol(rc3)] == 0, ]
+rc4 <- cbind(rc3[, -ncol(rc3)] [, colSums(mydata_ones) >0 ])
+ncol(rc4)
+View(rc4)
+
+rc_pca <- prcomp(rc4[,c(1:4452)],center = TRUE, scale. = TRUE)
+#rc_pca <- prcomp(rc2,center = TRUE, scale. = TRUE)
+str(rc_pca)
+summary(rc_pca)
+#plot(rc_pca)
+
+autoplot(rc_pca)
+autoplot(rc_pca, data = rc2_a, colour = 'Group')
+autoplot(rc_pca, data = rc2_a, colour = 'Group', label = TRUE, label.size = 3)
+```
+## PCAs_CEearly-late+invitro
+```{r}
+rc2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/transposed_SF_Salmonella_invivo-invitro-all_rc_meta.csv", row.names=1)
+View(rc2)
+#head(rc2)
+rc2_a <- (rc2[c(1:36, 55:62),c(1:5137)])
+rc3 <- (rc2[c(1:36, 55:62),c(1:5136)])
+View(rc3)
+head(rc3)
+ncol(rc3)
+
+mydata_ones <- rc3 [ rc3[, ncol(rc3)] == 0, ]
+rc4 <- cbind(rc3[, -ncol(rc3)] [, colSums(mydata_ones) >0 ])
+ncol(rc4)
+View(rc4)
+
+rc_pca <- prcomp(rc4[,c(1:4486)],center = TRUE, scale. = TRUE)
+#rc_pca <- prcomp(rc2,center = TRUE, scale. = TRUE)
+str(rc_pca)
+summary(rc_pca)
+#plot(rc_pca)
+
+autoplot(rc_pca)
+autoplot(rc_pca, data = rc2_a, colour = 'Group')
+autoplot(rc_pca, data = rc2_a, colour = 'Group', label = TRUE, label.size = 3)
+```
+## PCAs_invivo
+```{r}
+rc2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/transposed_SF_Salmonella_invivo-invitro-all_rc_meta.csv", row.names=1)
+View(rc2)
+#head(rc2)
+rc2_a <- (rc2[c(37:62),c(1:5137)])
+rc3 <- (rc2[c(37:62),c(1:5136)])
+View(rc3)
+head(rc3)
+ncol(rc3)
+rc4 <- rc3[, colSums(rc3) >0 ]
+View(rc4)
+ncol(rc4)
+
+write.csv(rc3,"D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/rc3-proba.csv",row.names=T)
+
+mydata_ones <- rc3 [ rc3[, ncol(rc3)] == 0, ]
+colSums(mydata_ones)
+colSums(rc3)
+rc4 <- cbind(rc3[, -ncol(rc3)] [, colSums(mydata_ones) >0 ])
+ncol(rc4)
+View(rc4)
+
+rc_pca <- prcomp(rc4[,c(1:3678)],center = TRUE, scale. = TRUE)
+#rc_pca <- prcomp(rc2,center = TRUE, scale. = TRUE)
+str(rc_pca)
+summary(rc_pca)
+#plot(rc_pca)
+
+autoplot(rc_pca)
+autoplot(rc_pca, data = rc2_a, colour = 'Group')
+autoplot(rc_pca, data = rc2_a, colour = 'Group', label = TRUE, label.size = 3)
+```
+## PCAs_invivo_CEearly-late
+```{r}
+rc2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/transposed_SF_Salmonella_invivo-invitro-all_rc_meta.csv", row.names=1)
+rc2 <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/DEG/K-method_v_1-1/transposed_SF_Salmonella_CEearly-late_meta.csv", row.names=1)
+View(rc2)
+#head(rc2)
+rc2_a <- (rc2[c(37:42),c(1:5137)])
+View(rc2_a)
+rc2_a <- (rc2[,c(1:4393)])
+rc3 <- (rc2[,c(1:4392)])
+rc3 <- (rc2[c(37:42),c(1:5136)])
+View(rc3)
+head(rc3)
+ncol(rc3)
+
+mydata_ones <- rc3 [ rc3[, ncol(rc3)] == 0, ]
+colSums(mydata_ones)
+rc4 <- cbind(rc3[, -ncol(rc3)] [, colSums(mydata_ones) >0 ])
+ncol(rc4)
+View(rc4)
+
+rc_pca <- prcomp(rc3[,c(1:4392)],center = TRUE, scale. = TRUE)
+#rc_pca <- prcomp(rc2,center = TRUE, scale. = TRUE)
+str(rc_pca)
+summary(rc_pca)
+#plot(rc_pca)
+
+autoplot(rc_pca)
+autoplot(rc_pca, data = rc2_a, colour = 'Group')
+autoplot(rc_pca, data = rc2_a, colour = 'Group', label = TRUE, label.size = 3)
+```

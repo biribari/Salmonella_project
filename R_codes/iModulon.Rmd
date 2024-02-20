@@ -1,0 +1,105 @@
+---
+title: "iModulons"
+output: word_document
+editor_options:
+  chunk_output_type: console
+---
+```{r}
+library(dplyr) # data wrangling
+library(ggplot2) # plotting
+library(DESeq2) # rna-seq
+library(edgeR) # rna-seq
+library(pheatmap) #heatmap
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+    #install.packages("BiocManager")
+#BiocManager::install("clusterProfiler")
+#BiocManager::install("pathview")
+library(clusterProfiler)
+library(DOSE)
+library(pathview)
+library(dplyr) # data wrangling
+library(ggplot2) # plotting
+#library(enrichR)
+#install.packages("tidyverse")
+#install.packages("purrr")
+library(pheatmap)
+library(rafalib)
+library(DESeq2)
+#install.packages("pvclust")
+library(pvclust)
+library(biomaRt)
+#BiocManager::install("biomaRt")
+library(enrichR)
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+    #install.packages("BiocManager", force = TRUE) 
+
+#BiocManager::install("fgsea")
+library(fgsea)
+install.packages("devtools")
+library("devtools")
+#install_github("wjawaid/enrichR")
+#detach("package:enrichR", unload = TRUE)
+#install.packages("enrichR", dependencies=TRUE)
+#install.packages("tidyverse")
+```
+
+```{r}
+setwd("D:/RNASeq/preprocessing/data/in-vivo/iModulons")
+getwd()
+
+rc <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/iModulons/SPI1.csv", row.names=1, fill= TRUE)
+#View(rc)
+#rc <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/iModulons/fnr1-2_03-24_2023.csv", row.names=1, fill= TRUE)
+#rc <- read.csv2("D:/RNAseq/preprocessing/data/in-vivo/iModulons/SPI-2_03-24-2023.csv", row.names=1, fill= TRUE)
+#View(rc)
+
+str(rc)
+head(rc)
+mydata <- rc [ rc[, ncol(rc)] == 0, ]
+rc2 <- cbind(rc[, -ncol(rc)] [, colSums(mydata) >0 ])
+View(rc2)
+dim(rc2)
+```
+
+```{r}
+rc_f <- rc[, c(1:6)]
+View(rc_f)
+dim(rc_f)
+apply(rc2,2,max) #gives the highest number in a collumn!!!
+#rc3 <- rc2[,37:73] # filtered all the in vivo
+#View(rc3)
+
+rc3 <- rc2[, c(1:6, 10:32)] # filtered all the in vivo acute
+View(rc3)
+boxplot(rc_f,ylab=expression('TPM'),ylim = c(0, 1000),las=2, main="SPI-1-imodulon",cex.lab=1, cex.axis=0.5)
+boxplot(rc3,ylab=expression('TPM'),ylim = c(0, 5000),las=2, main="Fnr-iModulon", cex.lab=1, cex.axis=0.5)
+boxplot(rc_f,ylab=expression('Relative expression TPM'),ylim = c(0, 80),las=2, main="SPI-2-iModulon", cex.lab=1, cex.axis=1.0)
+#plot(SPI2, type ="p",ylab ="relative_expression")
+```
+
+```{r}
+#rc2_f <- rc2[,1:99]
+#View(rc2_f)
+#dim(rc2_f)
+apply(rc2,2,max) #gives the highest number in a collumn!!!
+rc3 <- rc2[,37:99] # filtered all the in vivo
+View(rc3)
+#(rc2[c(1:42),c(1:5137)])rc2[c(1:36, 55:62)
+rc4 <- rc3[c(1:47),c(1:3, 10:32)] # filtered all the in vivo
+View(rc4)
+rc5 <- rc3[c(1:47), c(7:9, 33:63)]
+#boxplot(rc2,ylab=expression('Relative expression'),ylim = c(0, 2000),las=2, main="SPI-1-iModulon", cex.lab=1, cex.axis=0.5)
+boxplot(rc5,ylab=('Relative expression'),ylim = c(0, 1500),las=2, main="SPI-1-iModulon", cex.lab=1, cex.axis=0.5) 
+
+boxplot(rc_f, ylab=substitute(paste(bold('Relative expression'))),ylim = c(-5, 5),las=2.5, main="SPI-1-iModulon (49 genes)", cex.lab=1, cex.axis=0.75, frame = TRUE, col = c("#5AB6E7","#5AB6E7","#5AB6E7", "#E69F00", "#E69F00", "#E69F00"))
+#plot(SPI2, type ="p",ylab ="relative_expression")
+```
+
+```{r}
+#selected_genes <- rownames(SPI2)[(abs(SPI2$nr_of.zeros) < 20)]#would mean all the gene!
+selected_genes <- rownames(SPI2)[(abs(SPI2$nr_of.zeros) < 20)]
+#View(selected_genes)
+data <- SPI2[,1:16] 
+#View(data)
+group <- pheatmap(data[rownames(data) %in% selected_genes,], scale="row" , color = colorRampPalette(c("blue4","white","firebrick"))(100), fontsize_row = 7, height = 1000, border_color=NA, cluster_cols=F, cutree_rows=2)
+```

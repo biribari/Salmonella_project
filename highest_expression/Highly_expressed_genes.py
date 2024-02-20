@@ -20,13 +20,13 @@ for i,x in enumerate(dok.columns): #x= head of columns, i= counter
 		doksorted=dok.sort_values(by=x,ascending=False)
 		#print(list(dok.iloc[range(1,50), 0]))
 		#break	
-		dic[x] = list(doksorted.iloc[range(0,200), 0]) #key:oszlap fejléce=value:Lista(50 gén név)	
+		dic[x] = list(doksorted.iloc[range(0,200), 0]) #key:column head=value:List(50 gene name)	
 #print(dic)	
 z = []
 torlendo=[]
-for n,t in enumerate(dic.values()): # n= számláló (hanyadik futásában van a ciklus, t= dictionary értékei
-	if n == 0: #ha valami egyenlőe valamovel ==
-		z = t	#érték adás =
+for n,t in enumerate(dic.values()): # n= counter t= dictionary value
+	if n == 0: 
+		z = t	
 	for elem in z:
 		if elem in t:
 			#print(elem)
